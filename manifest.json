@@ -1,13 +1,18 @@
 {
   "name": "Shopping List",
   "short_name": "ShopList",
-  "description": "A simple offline shopping list",
+  "description": "A simple offline shopping list with recipes and week planner",
   "start_url": "/shopList/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#16a34a",
   "orientation": "portrait",
   "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",

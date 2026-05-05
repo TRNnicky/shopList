@@ -1,55 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="ShopList" />
-  <meta name="theme-color" content="#16a34a" />
-
-  <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css" />
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ShopList">
+  <meta name="theme-color" content="#16a34a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
   <title>Shopping List</title>
 </head>
 <body>
 
   <header>
-    <h1>🛒 Shopping List</h1>
-    <p class="subtitle" id="count">0 items left</p>
+    <h1 id="app-title">Shopping List</h1>
+    <p id="item-count" class="subtitle"></p>
   </header>
 
-  <div class="add-bar">
-    <input
-      id="item-name"
-      type="text"
-      placeholder="Add an item…"
-      autocomplete="off"
-      autocorrect="off"
-      spellcheck="false"
-    />
-    <input
-      id="item-qty"
-      class="qty-input"
-      type="text"
-      placeholder="Qty"
-      autocomplete="off"
-    />
-    <button class="btn btn-add" onclick="addItem()">Add</button>
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="shopping" role="tab" aria-selected="true">🛒 List</button>
+    <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">🕐 History</button>
+    <button class="tab-btn" data-tab="recipes" role="tab" aria-selected="false">📋 Recipes</button>
+    <button class="tab-btn" data-tab="week" role="tab" aria-selected="false">📅 Week</button>
+  </nav>
+
+  <main>
+
+    <!-- ── Shopping List Tab ── -->
+    <section id="tab-shopping" class="tab-content active" role="tabpanel">
+      <div class="add-bar">
+        <input id="add-name" type="text" placeholder="Item name…" autocomplete="off" autocorrect="off" spellcheck="false">
+        <input id="add-qty" type="text" placeholder="Qty" autocomplete="off">
+        <button id="add-btn" class="btn-primary">Add</button>
+      </div>
+
+      <ul id="shopping-list"></ul>
+
+      <div class="list-footer">
+        <button id="clear-checked-btn" class="btn-secondary btn-sm">Clear checked</button>
+        <button id="clear-all-btn" class="btn-danger btn-sm">Clear all</button>
+      </div>
+    </section>
+
+    <!-- ── History Tab ── -->
+    <section id="tab-history" class="tab-content" role="tabpanel">
+      <div class="search-bar">
+        <input id="history-search" type="search" placeholder="Search history…" autocomplete="off">
+      </div>
+      <ul id="history-list"></ul>
+      <div class="list-footer">
+        <button id="clear-history-btn" class="btn-danger btn-sm">Clear history</button>
+      </div>
+    </section>
+
+    <!-- ── Recipes Tab ── -->
+    <section id="tab-recipes" class="tab-content" role="tabpanel">
+      <div class="section-header">
+        <button id="new-recipe-btn" class="btn-primary">+ New Recipe</button>
+      </div>
+      <ul id="recipe-list"></ul>
+    </section>
+
+    <!-- ── Week Menu Tab ── -->
+    <section id="tab-week" class="tab-content" role="tabpanel">
+      <ul id="week-list"></ul>
+      <div class="list-footer">
+        <button id="add-week-btn" class="btn-primary">Add week's ingredients to list</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Recipe Form Modal ── -->
+  <div id="recipe-form-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2 id="recipe-form-title">New Recipe</h2>
+      <input id="recipe-name-input" type="text" placeholder="Recipe name" class="modal-input">
+      <div id="ingredient-rows" class="ingredient-list"></div>
+      <button id="add-ingredient-btn" class="btn-secondary btn-sm add-ing-btn">+ Add ingredient</button>
+      <div class="modal-actions">
+        <button id="save-recipe-btn" class="btn-primary">Save</button>
+        <button id="cancel-recipe-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
   </div>
 
-  <div class="controls">
-    <span></span>
-    <button class="btn-clear" onclick="clearChecked()">Clear checked</button>
+  <!-- ── Ingredient Picker Modal ── -->
+  <div id="ingredient-modal-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2 id="modal-recipe-title"></h2>
+      <p class="modal-hint">Select ingredients to add:</p>
+      <ul id="ingredient-checklist" class="ingredient-checklist"></ul>
+      <div class="modal-actions">
+        <button id="add-ingredients-btn" class="btn-primary">Add selected to list</button>
+        <button id="cancel-ingredients-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
   </div>
 
-  <main id="list"></main>
+  <!-- ── Toast ── -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-  <div class="toast" id="toast"></div>
-
+  <script src="db.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,192 +1,550 @@
-// ── IndexedDB setup ──────────────────────────────────────────────────────────
+// app.js — Shopping List PWA main logic
 
-const DB_NAME = 'shoplist';
-const DB_VERSION = 1;
-const STORE = 'items';
+// ─── State ───────────────────────────────────────────────────────────────────
+const state = {
+  items: [],
+  history: [],
+  recipes: [],
+  weekMenu: {}, // day (0–6) → { day, recipeId, recipeName }
+  activeTab: 'shopping',
+  editingRecipeId: null,
+};
 
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: 'id' });
-        store.createIndex('createdAt', 'createdAt', { unique: false });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-async function dbGetAll() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).index('createdAt').getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbPut(item) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).put(item);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbDelete(id) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbDeleteWhere(predicate) {
-  const all = await dbGetAll();
-  await Promise.all(all.filter(predicate).map((item) => dbDelete(item.id)));
-}
-
-// ── Render ────────────────────────────────────────────────────────────────────
-
-async function render() {
-  const items = await dbGetAll();
-  const list = document.getElementById('list');
-  const countEl = document.getElementById('count');
-
-  const pending = items.filter((i) => !i.checked).length;
-  countEl.textContent = `${pending} item${pending !== 1 ? 's' : ''} left`;
-
-  if (items.length === 0) {
-    list.innerHTML = `<div class="empty"><span>🛒</span>Your list is empty.<br>Add something above!</div>`;
-    return;
+function mergeQty(existing, incoming) {
+  const a = parseFloat(existing);
+  const b = parseFloat(incoming);
+  if (!isNaN(a) && !isNaN(b)) {
+    const unit = (
+      existing.replace(/[\d.\s]/g, '') || incoming.replace(/[\d.\s]/g, '')
+    ).trim();
+    return unit ? `${a + b} ${unit}` : `${a + b}`;
   }
-
-  // unchecked first, then checked
-  const sorted = [
-    ...items.filter((i) => !i.checked),
-    ...items.filter((i) => i.checked),
-  ];
-
-  list.innerHTML = sorted.map((item) => `
-    <div class="item ${item.checked ? 'checked' : ''}" data-id="${item.id}">
-      <button class="item-check" aria-label="Toggle ${escHtml(item.name)}" onclick="toggle('${item.id}')"></button>
-      <input
-        class="item-name-input"
-        value="${escAttr(item.name)}"
-        placeholder="Item name"
-        onblur="updateField('${item.id}', 'name', this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"
-      />
-      <input
-        class="item-qty-input"
-        value="${escAttr(item.qty || '')}"
-        placeholder="Qty"
-        onblur="updateField('${item.id}', 'qty', this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"
-      />
-      <button class="item-delete" aria-label="Delete ${escHtml(item.name)}" onclick="remove('${item.id}')">✕</button>
-    </div>
-  `).join('');
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+  return `${existing} + ${incoming}`;
 }
 
-// ── Actions ───────────────────────────────────────────────────────────────────
+// ─── Toast ───────────────────────────────────────────────────────────────────
 
-async function addItem() {
-  const nameInput = document.getElementById('item-name');
-  const qtyInput = document.getElementById('item-qty');
+let _toastTimer = null;
 
-  const name = nameInput.value.trim();
-  if (!name) { nameInput.focus(); return; }
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden', 'toast-hide');
+  el.classList.add('toast-show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.classList.remove('toast-show');
+    el.classList.add('toast-hide');
+    setTimeout(() => { el.classList.remove('toast-hide'); el.classList.add('hidden'); }, 300);
+  }, 2500);
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+
+function switchTab(name) {
+  state.activeTab = name;
+  document.querySelectorAll('.tab-btn').forEach((b) =>
+    b.classList.toggle('active', b.dataset.tab === name)
+  );
+  document.querySelectorAll('.tab-content').forEach((s) =>
+    s.classList.toggle('active', s.id === 'tab-' + name)
+  );
+
+  const titles = {
+    shopping: 'Shopping List',
+    history: 'History',
+    recipes: 'Recipes',
+    week: 'Week Menu',
+  };
+  document.getElementById('app-title').textContent = titles[name] || 'Shopping List';
+
+  if (name === 'history') renderHistory();
+  if (name === 'recipes') renderRecipes();
+  if (name === 'week') renderWeekMenu();
+}
+
+// ─── Shopping List ────────────────────────────────────────────────────────────
+
+function renderShoppingList() {
+  const list = document.getElementById('shopping-list');
+  const sorted = [...state.items].sort((a, b) => {
+    if (a.checked !== b.checked) return a.checked ? 1 : -1;
+    return a.createdAt - b.createdAt;
+  });
+
+  list.innerHTML = '';
+  sorted.forEach((item) => {
+    const li = document.createElement('li');
+    li.className = 'item-row' + (item.checked ? ' checked' : '');
+    li.dataset.id = item.id;
+    li.innerHTML =
+      '<button class="check-btn" aria-label="Toggle checked">' + (item.checked ? '✓' : '') + '</button>' +
+      '<input class="item-name" type="text" value="' + esc(item.name) + '" placeholder="Name" aria-label="Item name">' +
+      '<input class="item-qty" type="text" value="' + esc(item.qty) + '" placeholder="Qty" aria-label="Quantity">' +
+      '<button class="delete-btn" aria-label="Delete">✕</button>';
+    list.appendChild(li);
+    requestAnimationFrame(() => li.classList.add('item-visible'));
+  });
+
+  updateItemCount();
+}
+
+function updateItemCount() {
+  const total = state.items.length;
+  const checked = state.items.filter((i) => i.checked).length;
+  const el = document.getElementById('item-count');
+  el.textContent = total === 0 ? '' : (total - checked) + ' remaining · ' + total + ' total';
+}
+
+async function addItem(name, qty, opts) {
+  const silent = opts && opts.silent;
+  name = (name || '').trim();
+  if (!name) return 'empty';
+  qty = (qty || '').trim();
+
+  const existing = state.items.find(
+    (i) => i.name.toLowerCase() === name.toLowerCase()
+  );
+
+  if (existing) {
+    const newQty = mergeQty(existing.qty, qty);
+    existing.qty = newQty;
+    await DB.putItem(existing);
+    renderShoppingList();
+    if (!silent) showToast('"' + existing.name + '" already in list — qty updated to ' + (newQty || '—'));
+    return 'merged';
+  }
 
   const item = {
     id: crypto.randomUUID(),
-    name,
-    qty: qtyInput.value.trim(),
+    name: name,
+    qty: qty,
     checked: false,
     createdAt: Date.now(),
   };
-
-  await dbPut(item);
-  nameInput.value = '';
-  qtyInput.value = '';
-  nameInput.focus();
-  await render();
+  state.items.push(item);
+  await DB.putItem(item);
+  await _recordHistoryState(name);
+  renderShoppingList();
+  return 'added';
 }
 
-async function updateField(id, field, value) {
-  const all = await dbGetAll();
-  const item = all.find((i) => i.id === id);
+async function _recordHistoryState(name) {
+  await DB.recordHistory(name);
+  const key = name.trim().toLowerCase();
+  const existing = state.history.find((h) => h.key === key);
+  if (existing) {
+    existing.displayName = name.trim();
+    existing.lastUsed = Date.now();
+    existing.count = (existing.count || 0) + 1;
+  } else {
+    state.history.push({ key: key, displayName: name.trim(), lastUsed: Date.now(), count: 1 });
+  }
+}
+
+async function toggleCheck(id) {
+  const item = state.items.find((i) => i.id === id);
   if (!item) return;
-  const trimmed = value.trim();
-  if (field === 'name' && !trimmed) return; // don't save empty name
-  item[field] = trimmed;
-  await dbPut(item);
-  await render();
+  item.checked = !item.checked;
+  await DB.putItem(item);
+  renderShoppingList();
 }
 
-
-async function toggle(id) {
-  const all = await dbGetAll();
-  await dbPut(item);
-  await render();
+async function deleteItem(id) {
+  state.items = state.items.filter((i) => i.id !== id);
+  await DB.deleteItem(id);
+  renderShoppingList();
 }
 
-async function remove(id) {
-  await dbDelete(id);
-  await render();
-  showToast('Item removed');
+async function updateItemField(id, field, value) {
+  const item = state.items.find((i) => i.id === id);
+  if (!item || item[field] === value) return;
+  item[field] = value;
+  await DB.putItem(item);
+  updateItemCount();
 }
 
 async function clearChecked() {
-  await dbDeleteWhere((i) => i.checked);
-  await render();
-  showToast('Checked items cleared');
+  const toRemove = state.items.filter((i) => i.checked);
+  for (const item of toRemove) await DB.deleteItem(item.id);
+  state.items = state.items.filter((i) => !i.checked);
+  renderShoppingList();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+async function clearAllItems() {
+  await DB.clearItems();
+  state.items = [];
+  renderShoppingList();
 }
 
-function escAttr(str) {
-  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+// ─── History ──────────────────────────────────────────────────────────────────
 
-let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
-}
+function renderHistory(filter) {
+  const search = document.getElementById('history-search');
+  const term = (filter !== undefined ? filter : (search ? search.value : '')).toLowerCase();
+  const list = document.getElementById('history-list');
+  const filtered = state.history
+    .filter((h) => !term || h.displayName.toLowerCase().includes(term))
+    .sort((a, b) => b.lastUsed - a.lastUsed);
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', async () => {
-  await render();
-
-  // Add on Enter key in name field
-  document.getElementById('item-name').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') addItem();
-  });
-
-  // Move focus to name when hitting Enter on qty
-  document.getElementById('item-qty').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') addItem();
-  });
-
-  // Register service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  list.innerHTML = '';
+  if (filtered.length === 0) {
+    list.innerHTML = '<li class="empty-msg">No history yet.</li>';
+    return;
   }
-});
+  filtered.forEach((h) => {
+    const li = document.createElement('li');
+    li.className = 'history-row';
+    const date = h.lastUsed ? new Date(h.lastUsed).toLocaleDateString() : '';
+    li.innerHTML =
+      '<span class="history-name">' + esc(h.displayName) + '</span>' +
+      '<span class="history-date">' + esc(date) + '</span>' +
+      '<button class="readd-btn" data-key="' + esc(h.key) + '" aria-label="Add to list">+</button>';
+    list.appendChild(li);
+  });
+}
+
+async function reAddFromHistory(key) {
+  const entry = state.history.find((h) => h.key === key);
+  if (!entry) return;
+  const result = await addItem(entry.displayName, '');
+  if (result === 'added') showToast('"' + entry.displayName + '" added to list');
+}
+
+async function clearHistory() {
+  await DB.clearHistory();
+  state.history = [];
+  renderHistory();
+}
+
+// ─── Recipes ──────────────────────────────────────────────────────────────────
+
+function renderRecipes() {
+  const list = document.getElementById('recipe-list');
+  list.innerHTML = '';
+  if (state.recipes.length === 0) {
+    list.innerHTML = '<li class="empty-msg">No recipes yet. Tap "+ New Recipe" to add one.</li>';
+    return;
+  }
+  state.recipes.forEach((r) => {
+    const li = document.createElement('li');
+    li.className = 'recipe-row';
+    const ingCount = r.ingredients.length;
+    li.innerHTML =
+      '<div class="recipe-info">' +
+        '<span class="recipe-name">' + esc(r.name) + '</span>' +
+        '<span class="recipe-meta">' + ingCount + ' ingredient' + (ingCount !== 1 ? 's' : '') + '</span>' +
+      '</div>' +
+      '<div class="recipe-btns">' +
+        '<button class="btn-sm btn-primary add-recipe-btn" data-id="' + esc(r.id) + '">Add to list</button>' +
+        '<button class="btn-sm btn-secondary edit-recipe-btn" data-id="' + esc(r.id) + '" aria-label="Edit">✎</button>' +
+        '<button class="btn-sm btn-danger del-recipe-btn" data-id="' + esc(r.id) + '" aria-label="Delete">✕</button>' +
+      '</div>';
+    list.appendChild(li);
+  });
+}
+
+function openRecipeForm(recipe) {
+  state.editingRecipeId = recipe ? recipe.id : null;
+  document.getElementById('recipe-form-title').textContent = recipe ? 'Edit Recipe' : 'New Recipe';
+  document.getElementById('recipe-name-input').value = recipe ? recipe.name : '';
+  const rows = document.getElementById('ingredient-rows');
+  rows.innerHTML = '';
+  const ingredients = recipe ? recipe.ingredients : [{ name: '', qty: '' }];
+  ingredients.forEach((ing) => _addIngredientRow(ing.name, ing.qty));
+  document.getElementById('recipe-form-overlay').classList.remove('hidden');
+  document.getElementById('recipe-name-input').focus();
+}
+
+function closeRecipeForm() {
+  document.getElementById('recipe-form-overlay').classList.add('hidden');
+  state.editingRecipeId = null;
+}
+
+function _addIngredientRow(name, qty) {
+  const rows = document.getElementById('ingredient-rows');
+  const div = document.createElement('div');
+  div.className = 'ingredient-row';
+  div.innerHTML =
+    '<input type="text" class="ing-name" placeholder="Ingredient" value="' + esc(name || '') + '" aria-label="Ingredient name">' +
+    '<input type="text" class="ing-qty" placeholder="Qty" value="' + esc(qty || '') + '" aria-label="Quantity">' +
+    '<button class="remove-ing-btn btn-icon" aria-label="Remove">✕</button>';
+  rows.appendChild(div);
+}
+
+async function saveRecipe() {
+  const name = document.getElementById('recipe-name-input').value.trim();
+  if (!name) {
+    showToast('Recipe name is required');
+    document.getElementById('recipe-name-input').focus();
+    return;
+  }
+  const ingredients = [];
+  document.querySelectorAll('#ingredient-rows .ingredient-row').forEach((row) => {
+    const n = row.querySelector('.ing-name').value.trim();
+    const q = row.querySelector('.ing-qty').value.trim();
+    if (n) ingredients.push({ name: n, qty: q });
+  });
+
+  if (state.editingRecipeId) {
+    const recipe = state.recipes.find((r) => r.id === state.editingRecipeId);
+    recipe.name = name;
+    recipe.ingredients = ingredients;
+    await DB.putRecipe(recipe);
+  } else {
+    const recipe = { id: crypto.randomUUID(), name: name, ingredients: ingredients, createdAt: Date.now() };
+    state.recipes.push(recipe);
+    await DB.putRecipe(recipe);
+  }
+  closeRecipeForm();
+  renderRecipes();
+}
+
+async function deleteRecipe(id) {
+  state.recipes = state.recipes.filter((r) => r.id !== id);
+  await DB.deleteRecipe(id);
+  for (let day = 0; day < 7; day++) {
+    const entry = state.weekMenu[day];
+    if (entry && entry.recipeId === id) {
+      const cleared = { day: day, recipeId: null, recipeName: null };
+      state.weekMenu[day] = cleared;
+      await DB.putWeekDay(cleared);
+    }
+  }
+  renderRecipes();
+}
+
+function openIngredientModal(recipeId) {
+  const recipe = state.recipes.find((r) => r.id === recipeId);
+  if (!recipe) return;
+  const checklist = document.getElementById('ingredient-checklist');
+  checklist.innerHTML = '';
+  recipe.ingredients.forEach((ing) => {
+    const li = document.createElement('li');
+    li.innerHTML =
+      '<label class="check-label">' +
+        '<input type="checkbox" checked data-name="' + esc(ing.name) + '" data-qty="' + esc(ing.qty) + '">' +
+        '<span>' + esc(ing.name) + (ing.qty ? ' <em>' + esc(ing.qty) + '</em>' : '') + '</span>' +
+      '</label>';
+    checklist.appendChild(li);
+  });
+  document.getElementById('modal-recipe-title').textContent = recipe.name;
+  document.getElementById('ingredient-modal-overlay').classList.remove('hidden');
+}
+
+function closeIngredientModal() {
+  document.getElementById('ingredient-modal-overlay').classList.add('hidden');
+}
+
+async function addSelectedIngredients() {
+  const checks = document.querySelectorAll('#ingredient-checklist input[type=checkbox]:checked');
+  let added = 0, merged = 0;
+  for (const cb of checks) {
+    const result = await addItem(cb.dataset.name, cb.dataset.qty, { silent: true });
+    if (result === 'added') added++;
+    else if (result === 'merged') merged++;
+  }
+  closeIngredientModal();
+  const parts = [];
+  if (added > 0) parts.push(added + ' added');
+  if (merged > 0) parts.push(merged + ' merged');
+  if (parts.length > 0) { showToast(parts.join(', ') + ' to shopping list'); switchTab('shopping'); }
+}
+
+// ─── Week Menu ────────────────────────────────────────────────────────────────
+
+function renderWeekMenu() {
+  const list = document.getElementById('week-list');
+  list.innerHTML = '';
+  DAYS.forEach((dayName, i) => {
+    const entry = state.weekMenu[i];
+    const li = document.createElement('li');
+    li.className = 'week-row';
+    const options = state.recipes.map((r) =>
+      '<option value="' + esc(r.id) + '"' + (entry && entry.recipeId === r.id ? ' selected' : '') + '>' + esc(r.name) + '</option>'
+    ).join('');
+    li.innerHTML =
+      '<span class="day-label">' + dayName + '</span>' +
+      '<select class="recipe-select" data-day="' + i + '" aria-label="Recipe for ' + dayName + '">' +
+        '<option value="">— none —</option>' + options +
+      '</select>' +
+      '<button class="btn-icon clear-day-btn" data-day="' + i + '" aria-label="Clear ' + dayName + '">✕</button>';
+    list.appendChild(li);
+  });
+}
+
+async function setWeekDay(day, recipeId) {
+  const recipe = recipeId ? state.recipes.find((r) => r.id === recipeId) : null;
+  const entry = { day: day, recipeId: recipe ? recipe.id : null, recipeName: recipe ? recipe.name : null };
+  state.weekMenu[day] = entry;
+  await DB.putWeekDay(entry);
+}
+
+async function clearWeekDay(day) {
+  const entry = { day: day, recipeId: null, recipeName: null };
+  state.weekMenu[day] = entry;
+  await DB.putWeekDay(entry);
+  renderWeekMenu();
+}
+
+async function addWeekIngredients() {
+  let added = 0, merged = 0;
+  for (let day = 0; day < 7; day++) {
+    const entry = state.weekMenu[day];
+    if (!entry || !entry.recipeId) continue;
+    const recipe = state.recipes.find((r) => r.id === entry.recipeId);
+    if (!recipe) continue;
+    for (const ing of recipe.ingredients) {
+      const result = await addItem(ing.name, ing.qty, { silent: true });
+      if (result === 'added') added++;
+      else if (result === 'merged') merged++;
+    }
+  }
+  if (added + merged === 0) { showToast('No ingredients to add — assign recipes to days first'); return; }
+  const parts = [];
+  if (added > 0) parts.push(added + ' added');
+  if (merged > 0) parts.push(merged + ' merged');
+  showToast(parts.join(', ') + ' to shopping list');
+  switchTab('shopping');
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+function initEvents() {
+  document.querySelectorAll('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Shopping list
+  const addNameEl = document.getElementById('add-name');
+  const addQtyEl  = document.getElementById('add-qty');
+
+  async function handleAdd() {
+    await addItem(addNameEl.value, addQtyEl.value);
+    addNameEl.value = '';
+    addQtyEl.value = '';
+    addNameEl.focus();
+  }
+
+  document.getElementById('add-btn').addEventListener('click', handleAdd);
+  addNameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') addQtyEl.focus(); });
+  addQtyEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAdd(); });
+
+  const shopList = document.getElementById('shopping-list');
+  shopList.addEventListener('click', async (e) => {
+    const row = e.target.closest('.item-row');
+    if (!row) return;
+    const id = row.dataset.id;
+    if (e.target.classList.contains('check-btn')) await toggleCheck(id);
+    else if (e.target.classList.contains('delete-btn')) await deleteItem(id);
+  });
+  shopList.addEventListener('change', async (e) => {
+    const row = e.target.closest('.item-row');
+    if (!row) return;
+    const id = row.dataset.id;
+    if (e.target.classList.contains('item-name')) await updateItemField(id, 'name', e.target.value);
+    else if (e.target.classList.contains('item-qty')) await updateItemField(id, 'qty', e.target.value);
+  });
+
+  document.getElementById('clear-checked-btn').addEventListener('click', clearChecked);
+  document.getElementById('clear-all-btn').addEventListener('click', async () => {
+    if (state.items.length === 0) return;
+    if (confirm('Clear all items?')) await clearAllItems();
+  });
+
+  // History
+  document.getElementById('history-search').addEventListener('input', (e) => renderHistory(e.target.value));
+  document.getElementById('history-list').addEventListener('click', async (e) => {
+    if (e.target.classList.contains('readd-btn')) await reAddFromHistory(e.target.dataset.key);
+  });
+  document.getElementById('clear-history-btn').addEventListener('click', async () => {
+    if (state.history.length === 0) return;
+    if (confirm('Clear all history? This cannot be undone.')) await clearHistory();
+  });
+
+  // Recipes
+  document.getElementById('new-recipe-btn').addEventListener('click', () => openRecipeForm(null));
+  document.getElementById('recipe-list').addEventListener('click', async (e) => {
+    const id = e.target.dataset.id;
+    if (!id) return;
+    if (e.target.classList.contains('add-recipe-btn')) openIngredientModal(id);
+    else if (e.target.classList.contains('edit-recipe-btn')) {
+      const recipe = state.recipes.find((r) => r.id === id);
+      if (recipe) openRecipeForm(recipe);
+    } else if (e.target.classList.contains('del-recipe-btn')) {
+      if (confirm('Delete this recipe?')) await deleteRecipe(id);
+    }
+  });
+  document.getElementById('add-ingredient-btn').addEventListener('click', () => _addIngredientRow('', ''));
+  document.getElementById('ingredient-rows').addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove-ing-btn')) {
+      const rows = document.querySelectorAll('#ingredient-rows .ingredient-row');
+      if (rows.length > 1) e.target.closest('.ingredient-row').remove();
+    }
+  });
+  document.getElementById('save-recipe-btn').addEventListener('click', saveRecipe);
+  document.getElementById('cancel-recipe-btn').addEventListener('click', closeRecipeForm);
+  document.getElementById('recipe-form-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeRecipeForm();
+  });
+
+  // Ingredient modal
+  document.getElementById('add-ingredients-btn').addEventListener('click', addSelectedIngredients);
+  document.getElementById('cancel-ingredients-btn').addEventListener('click', closeIngredientModal);
+  document.getElementById('ingredient-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeIngredientModal();
+  });
+
+  // Week menu
+  document.getElementById('week-list').addEventListener('change', async (e) => {
+    if (e.target.classList.contains('recipe-select')) {
+      await setWeekDay(parseInt(e.target.dataset.day), e.target.value);
+    }
+  });
+  document.getElementById('week-list').addEventListener('click', async (e) => {
+    if (e.target.classList.contains('clear-day-btn')) {
+      await clearWeekDay(parseInt(e.target.dataset.day));
+    }
+  });
+  document.getElementById('add-week-btn').addEventListener('click', addWeekIngredients);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+  await openDB();
+  const [items, history, recipes] = await Promise.all([
+    DB.getItems(),
+    DB.getHistory(),
+    DB.getRecipes(),
+  ]);
+  state.items = items;
+  state.history = history;
+  state.recipes = recipes;
+
+  const weekArr = await DB.getWeekMenu();
+  weekArr.forEach((e) => { state.weekMenu[e.day] = e; });
+
+  renderShoppingList();
+  initEvents();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  }
+}
+
+init();
