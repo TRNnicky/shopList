@@ -83,16 +83,31 @@ function _get(storeName, key) {
 }
 
 const DB = {
-  // Items — { id, name, qty, checked, createdAt }
+  // Items — { id, name, qty, checked, createdAt, sortOrder }
   getItems: () => _getAll('items'),
-  putItem: (item) => _put('items', item),
-  deleteItem: (id) => _delete('items', id),
-  clearItems: () => _clear('items'),
+  async putItem(item) {
+    await _put('items', item);
+    Sync.upsertItem(item);
+  },
+  async deleteItem(id) {
+    await _delete('items', id);
+    Sync.deleteItem(id);
+  },
+  async clearItems() {
+    await _clear('items');
+    Sync.clearItems();
+  },
 
   // History — { key (lowercase), displayName, lastUsed, count }
   getHistory: () => _getAll('history'),
-  putHistory: (entry) => _put('history', entry),
-  clearHistory: () => _clear('history'),
+  async putHistory(entry) {
+    await _put('history', entry);
+    Sync.upsertHistory(entry);
+  },
+  async clearHistory() {
+    await _clear('history');
+    Sync.clearHistory();
+  },
 
   async recordHistory(name) {
     const key = name.trim().toLowerCase();
@@ -101,15 +116,26 @@ const DB = {
     entry.displayName = name.trim();
     entry.lastUsed = Date.now();
     entry.count = (entry.count || 0) + 1;
-    return _put('history', entry);
+    await _put('history', entry);
+    Sync.upsertHistory(entry);
+    return entry;
   },
 
   // Recipes — { id, name, ingredients: [{name, qty}], createdAt }
   getRecipes: () => _getAll('recipes'),
-  putRecipe: (recipe) => _put('recipes', recipe),
-  deleteRecipe: (id) => _delete('recipes', id),
+  async putRecipe(recipe) {
+    await _put('recipes', recipe);
+    Sync.upsertRecipe(recipe);
+  },
+  async deleteRecipe(id) {
+    await _delete('recipes', id);
+    Sync.deleteRecipe(id);
+  },
 
   // Week menu — { day (0=Mon..6=Sun), recipeId, recipeName }
   getWeekMenu: () => _getAll('weekmenu'),
-  putWeekDay: (entry) => _put('weekmenu', entry),
+  async putWeekDay(entry) {
+    await _put('weekmenu', entry);
+    Sync.upsertWeekDay(entry);
+  },
 };

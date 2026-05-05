@@ -557,18 +557,35 @@ function initEvents() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
+  Sync.init();
   await openDB();
-  const [items, history, recipes] = await Promise.all([
-    DB.getItems(),
-    DB.getHistory(),
-    DB.getRecipes(),
-  ]);
-  state.items = items;
-  state.history = history;
-  state.recipes = recipes;
 
-  const weekArr = await DB.getWeekMenu();
-  weekArr.forEach((e) => { state.weekMenu[e.day] = e; });
+  // Try loading from Supabase first (online), fall back to IndexedDB (offline)
+  const remote = await Sync.fetchAll();
+
+  if (remote) {
+    // Seed local IndexedDB from Supabase so offline works after first load
+    await Promise.all([
+      ...(remote.items.map((i) => _put('items', i))),
+      ...(remote.history.map((h) => _put('history', h))),
+      ...(remote.recipes.map((r) => _put('recipes', r))),
+      ...(remote.weekmenu.map((w) => _put('weekmenu', w))),
+    ]);
+    state.items    = remote.items;
+    state.history  = remote.history;
+    state.recipes  = remote.recipes;
+    remote.weekmenu.forEach((e) => { state.weekMenu[e.day] = e; });
+  } else {
+    // Offline — load from local IndexedDB
+    const [items, history, recipes] = await Promise.all([
+      DB.getItems(), DB.getHistory(), DB.getRecipes(),
+    ]);
+    state.items   = items;
+    state.history = history;
+    state.recipes = recipes;
+    const weekArr = await DB.getWeekMenu();
+    weekArr.forEach((e) => { state.weekMenu[e.day] = e; });
+  }
 
   renderShoppingList();
   initEvents();
