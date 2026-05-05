@@ -426,7 +426,6 @@ main {
   gap: 10px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
 }
 
 .recipe-info {
@@ -434,16 +433,24 @@ main {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .recipe-name {
   font-size: .97rem;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recipe-meta {
   font-size: .78rem;
   color: var(--text-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recipe-btns {
