@@ -66,7 +66,13 @@ header {
   z-index: 20;
   background: var(--green);
   color: #fff;
-  padding: calc(var(--safe-top) + 10px) 16px 10px;
+  /* safe-area fallback chain: constant() for iOS <11.2, env() for modern */
+  padding-top: 10px;
+  padding-top: calc(constant(safe-area-inset-top) + 10px);
+  padding-top: calc(env(safe-area-inset-top) + 10px);
+  padding-bottom: 10px;
+  padding-left: 16px;
+  padding-right: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -78,12 +84,18 @@ header h1 {
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -.3px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .subtitle {
   font-size: .75rem;
   opacity: .85;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-refresh {
@@ -107,7 +119,9 @@ header h1 {
 /* ── Tab Nav ── */
 .tab-nav {
   position: sticky;
-  top: calc(var(--safe-top) + var(--header-h));
+  /* keep below header: safe-area + ~60px header content */
+  top: calc(constant(safe-area-inset-top) + var(--header-h));
+  top: calc(env(safe-area-inset-top) + var(--header-h));
   z-index: 19;
   display: flex;
   background: var(--bg);

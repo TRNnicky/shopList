@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shoplist-v4';
+const CACHE_NAME = 'shoplist-v5';
 const BASE = self.registration.scope;
 const ASSETS = [
   BASE,
