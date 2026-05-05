@@ -279,7 +279,7 @@ main {
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: .95rem;
+  font-size: 1rem; /* ≥16px prevents iOS auto-zoom */
   padding: 4px 6px;
   border-radius: 6px;
   transition: background .15s;
@@ -670,7 +670,7 @@ main {
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px;
-  font-size: .9rem;
+  font-size: 1rem; /* must be ≥16px to prevent iOS auto-zoom */
   background: var(--surface);
   color: var(--text);
   min-width: 0;
@@ -678,13 +678,15 @@ main {
 }
 
 .ingredient-row .ing-qty {
-  flex: 0 0 72px;
+  flex: 0 0 56px;
+  width: 56px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 10px;
-  font-size: .9rem;
+  padding: 8px 6px;
+  font-size: 1rem; /* must be ≥16px to prevent iOS auto-zoom */
   background: var(--surface);
   color: var(--text);
+  text-align: center;
   transition: border-color .15s;
 }
 
