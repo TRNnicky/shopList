@@ -133,10 +133,8 @@ async function updateField(id, field, value) {
 }
 
 
+async function toggle(id) {
   const all = await dbGetAll();
-  const item = all.find((i) => i.id === id);
-  if (!item) return;
-  item.checked = !item.checked;
   await dbPut(item);
   await render();
 }
