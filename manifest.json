@@ -2,7 +2,7 @@
   "name": "Shopping List",
   "short_name": "ShopList",
   "description": "A simple offline shopping list",
-  "start_url": "/",
+  "start_url": "/shopList/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#16a34a",
