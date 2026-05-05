@@ -53,6 +53,33 @@ function showToast(msg) {
   }, 2500);
 }
 
+function showConfirm(message) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('confirm-overlay');
+    document.getElementById('confirm-message').textContent = message;
+    overlay.classList.remove('hidden');
+
+    const ok = document.getElementById('confirm-ok-btn');
+    const cancel = document.getElementById('confirm-cancel-btn');
+
+    function finish(result) {
+      overlay.classList.add('hidden');
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onOverlay);
+      resolve(result);
+    }
+    const onOk = () => finish(true);
+    const onCancel = () => finish(false);
+    const onOverlay = (e) => { if (e.target === overlay) finish(false); };
+
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onOverlay);
+  });
+}
+
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 function switchTab(name) {
@@ -463,7 +490,7 @@ function initEvents() {
   document.getElementById('clear-checked-btn').addEventListener('click', clearChecked);
   document.getElementById('clear-all-btn').addEventListener('click', async () => {
     if (state.items.length === 0) return;
-    if (confirm('Clear all items?')) await clearAllItems();
+    if (await showConfirm('Clear all items from the list?')) await clearAllItems();
   });
 
   // History
@@ -473,7 +500,7 @@ function initEvents() {
   });
   document.getElementById('clear-history-btn').addEventListener('click', async () => {
     if (state.history.length === 0) return;
-    if (confirm('Clear all history? This cannot be undone.')) await clearHistory();
+    if (await showConfirm('Clear all history? This cannot be undone.')) await clearHistory();
   });
 
   // Recipes
@@ -486,7 +513,7 @@ function initEvents() {
       const recipe = state.recipes.find((r) => r.id === id);
       if (recipe) openRecipeForm(recipe);
     } else if (e.target.classList.contains('del-recipe-btn')) {
-      if (confirm('Delete this recipe?')) await deleteRecipe(id);
+      if (await showConfirm('Delete this recipe?')) await deleteRecipe(id);
     }
   });
   document.getElementById('add-ingredient-btn').addEventListener('click', () => _addIngredientRow('', ''));
