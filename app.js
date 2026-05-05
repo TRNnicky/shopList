@@ -560,49 +560,50 @@ async function init() {
   Sync.init();
   await openDB();
 
-  // One-time migration: push any existing local IndexedDB data to Supabase
-  if (Sync.online && !localStorage.getItem('sb_migrated')) {
-    const [localItems, localHistory, localRecipes, localWeek] = await Promise.all([
-      _getAll('items'), _getAll('history'), _getAll('recipes'), _getAll('weekmenu'),
-    ]);
-    const migrations = [
-      ...localItems.map((i)   => _sb_upsert('items',   i)),
-      ...localHistory.map((h) => _sb_upsert('history', h)),
-      ...localRecipes.map((r) => _sb_upsert('recipes', r)),
-      ...localWeek.map((w)    => _sb_upsert('weekmenu', w)),
-    ];
-    if (migrations.length) {
-      await Promise.all(migrations);
-      console.log('[sync] migrated', migrations.length, 'local records to Supabase');
-    }
-    localStorage.setItem('sb_migrated', '1');
-  }
+  // Read local data first
+  const [localItems, localHistory, localRecipes, localWeek] = await Promise.all([
+    _getAll('items'), _getAll('history'), _getAll('recipes'), _getAll('weekmenu'),
+  ]);
 
-  // Try loading from Supabase first (online), fall back to IndexedDB (offline)
+  // Try Supabase
   const remote = await Sync.fetchAll();
 
   if (remote) {
-    // Seed local IndexedDB from Supabase so offline works after first load
-    await Promise.all([
-      ...(remote.items.map((i) => _put('items', i))),
-      ...(remote.history.map((h) => _put('history', h))),
-      ...(remote.recipes.map((r) => _put('recipes', r))),
-      ...(remote.weekmenu.map((w) => _put('weekmenu', w))),
-    ]);
-    state.items    = remote.items;
-    state.history  = remote.history;
-    state.recipes  = remote.recipes;
-    remote.weekmenu.forEach((e) => { state.weekMenu[e.day] = e; });
+    // If Supabase is empty but we have local data → migrate it up
+    if (remote.items.length === 0 && localItems.length > 0) {
+      await Promise.all([
+        ...localItems.map((i)   => _sb_upsert('items',   i)),
+        ...localHistory.map((h) => _sb_upsert('history', h)),
+        ...localRecipes.map((r) => _sb_upsert('recipes', r)),
+        ...localWeek.map((w)    => _sb_upsert('weekmenu', w)),
+      ]);
+      // Re-fetch after migration
+      const migrated = await Sync.fetchAll();
+      if (migrated) {
+        state.items   = migrated.items;
+        state.history = migrated.history;
+        state.recipes = migrated.recipes;
+        migrated.weekmenu.forEach((e) => { state.weekMenu[e.day] = e; });
+      }
+    } else {
+      // Seed local IndexedDB from Supabase so offline works
+      await Promise.all([
+        ...(remote.items.map((i)   => _put('items',   i))),
+        ...(remote.history.map((h) => _put('history', h))),
+        ...(remote.recipes.map((r) => _put('recipes', r))),
+        ...(remote.weekmenu.map((w) => _put('weekmenu', w))),
+      ]);
+      state.items   = remote.items;
+      state.history = remote.history;
+      state.recipes = remote.recipes;
+      remote.weekmenu.forEach((e) => { state.weekMenu[e.day] = e; });
+    }
   } else {
-    // Offline — load from local IndexedDB
-    const [items, history, recipes] = await Promise.all([
-      DB.getItems(), DB.getHistory(), DB.getRecipes(),
-    ]);
-    state.items   = items;
-    state.history = history;
-    state.recipes = recipes;
-    const weekArr = await DB.getWeekMenu();
-    weekArr.forEach((e) => { state.weekMenu[e.day] = e; });
+    // Offline — use local IndexedDB
+    state.items   = localItems;
+    state.history = localHistory;
+    state.recipes = localRecipes;
+    localWeek.forEach((e) => { state.weekMenu[e.day] = e; });
   }
 
   renderShoppingList();
