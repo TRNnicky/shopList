@@ -6,6 +6,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Exposed for one-time migration use in app.js
+async function _sb_upsert(table, row) {
+  try { await _sb.from(table).upsert(row); } catch(e) {}
+}
+
 // Silent error handler — sync failures should never crash the app
 function _sbErr(label, err) {
   if (err) console.warn('[sync]', label, err.message || err);

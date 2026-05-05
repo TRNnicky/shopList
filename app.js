@@ -560,6 +560,24 @@ async function init() {
   Sync.init();
   await openDB();
 
+  // One-time migration: push any existing local IndexedDB data to Supabase
+  if (Sync.online && !localStorage.getItem('sb_migrated')) {
+    const [localItems, localHistory, localRecipes, localWeek] = await Promise.all([
+      _getAll('items'), _getAll('history'), _getAll('recipes'), _getAll('weekmenu'),
+    ]);
+    const migrations = [
+      ...localItems.map((i)   => _sb_upsert('items',   i)),
+      ...localHistory.map((h) => _sb_upsert('history', h)),
+      ...localRecipes.map((r) => _sb_upsert('recipes', r)),
+      ...localWeek.map((w)    => _sb_upsert('weekmenu', w)),
+    ];
+    if (migrations.length) {
+      await Promise.all(migrations);
+      console.log('[sync] migrated', migrations.length, 'local records to Supabase');
+    }
+    localStorage.setItem('sb_migrated', '1');
+  }
+
   // Try loading from Supabase first (online), fall back to IndexedDB (offline)
   const remote = await Sync.fetchAll();
 
