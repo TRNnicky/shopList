@@ -22,6 +22,7 @@
   --shadow:     0 1px 3px rgba(0,0,0,.08);
   --header-h:   60px;
   --nav-h:      52px;
+  --safe-top:   env(safe-area-inset-top, 0px);
   --safe-bottom:env(safe-area-inset-bottom, 0px);
 }
 
@@ -65,8 +66,7 @@ header {
   z-index: 20;
   background: var(--green);
   color: #fff;
-  padding: 0 16px;
-  height: var(--header-h);
+  padding: calc(var(--safe-top) + 10px) 16px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -86,10 +86,28 @@ header h1 {
   white-space: nowrap;
 }
 
+.btn-refresh {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background .15s, transform .3s;
+}
+.btn-refresh:hover { background: rgba(255,255,255,0.3); }
+.btn-refresh.spinning { transform: rotate(360deg); }
+
 /* ── Tab Nav ── */
 .tab-nav {
   position: sticky;
-  top: var(--header-h);
+  top: calc(var(--safe-top) + var(--header-h));
   z-index: 19;
   display: flex;
   background: var(--bg);

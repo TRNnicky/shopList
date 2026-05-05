@@ -460,6 +460,31 @@ function initEvents() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
+  // Refresh / sync button
+  document.getElementById('refresh-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-btn');
+    btn.classList.add('spinning');
+    btn.disabled = true;
+    const remote = await Sync.fetchAll();
+    if (remote) {
+      await Promise.all([
+        ...(remote.items.map((i)   => _put('items',   i))),
+        ...(remote.history.map((h) => _put('history', h))),
+        ...(remote.recipes.map((r) => _put('recipes', r))),
+        ...(remote.weekmenu.map((w) => _put('weekmenu', w))),
+      ]);
+      state.items   = remote.items;
+      state.history = remote.history;
+      state.recipes = remote.recipes;
+      remote.weekmenu.forEach((e) => { state.weekMenu[e.day] = e; });
+      renderShoppingList();
+      showToast('List synced ✓');
+    } else {
+      showToast('Offline — showing cached data');
+    }
+    setTimeout(() => { btn.classList.remove('spinning'); btn.disabled = false; }, 400);
+  });
+
   // Shopping list
   const addNameEl = document.getElementById('add-name');
   const addQtyEl  = document.getElementById('add-qty');
