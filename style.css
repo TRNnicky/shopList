@@ -204,6 +204,36 @@ main {
   opacity: .45;
 }
 
+.drag-handle {
+  cursor: grab;
+  color: var(--text-sub);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 2px;
+  flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.drag-handle:active { cursor: grabbing; }
+
+.item-row.checked .drag-handle { opacity: .3; }
+
+.item-ghost {
+  opacity: .35;
+  background: var(--green-light, #dcfce7);
+  border-radius: 8px;
+}
+
+.item-chosen { background: var(--surface); }
+
+.item-dragging {
+  opacity: .9;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
 .check-btn {
   width: 28px;
   height: 28px;

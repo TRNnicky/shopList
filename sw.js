@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shoplist-v2';
+const CACHE_NAME = 'shoplist-v3';
 const BASE = self.registration.scope;
 const ASSETS = [
   BASE,
@@ -8,6 +8,7 @@ const ASSETS = [
   BASE + 'app.js',
   BASE + 'manifest.json',
   BASE + 'favicon.svg',
+  BASE + 'sortable.min.js',
   BASE + 'icons/icon-192.png',
   BASE + 'icons/icon-512.png',
 ];

@@ -110,7 +110,9 @@ function renderShoppingList() {
   const list = document.getElementById('shopping-list');
   const sorted = [...state.items].sort((a, b) => {
     if (a.checked !== b.checked) return a.checked ? 1 : -1;
-    return a.createdAt - b.createdAt;
+    const ao = a.sortOrder ?? a.createdAt;
+    const bo = b.sortOrder ?? b.createdAt;
+    return ao - bo;
   });
 
   list.innerHTML = '';
@@ -119,6 +121,7 @@ function renderShoppingList() {
     li.className = 'item-row' + (item.checked ? ' checked' : '');
     li.dataset.id = item.id;
     li.innerHTML =
+      '<span class="drag-handle" aria-hidden="true">⠿</span>' +
       '<button class="check-btn" aria-label="Toggle checked">' + (item.checked ? '✓' : '') + '</button>' +
       '<input class="item-name" type="text" value="' + esc(item.name) + '" placeholder="Name" aria-label="Item name">' +
       '<input class="item-qty" type="text" value="' + esc(item.qty) + '" placeholder="Qty" aria-label="Quantity">' +
@@ -162,6 +165,7 @@ async function addItem(name, qty, opts) {
     qty: qty,
     checked: false,
     createdAt: Date.now(),
+    sortOrder: Date.now(),
   };
   state.items.push(item);
   await DB.putItem(item);
@@ -568,10 +572,38 @@ async function init() {
 
   renderShoppingList();
   initEvents();
+  initSortable();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(console.error);
   }
+}
+
+function initSortable() {
+  const list = document.getElementById('shopping-list');
+  Sortable.create(list, {
+    handle: '.drag-handle',
+    animation: 150,
+    ghostClass: 'item-ghost',
+    chosenClass: 'item-chosen',
+    dragClass: 'item-dragging',
+    // Only allow dragging unchecked items above checked ones
+    onEnd: async (evt) => {
+      // Read the new order from the DOM, assign sortOrder
+      const rows = list.querySelectorAll('.item-row');
+      const updates = [];
+      rows.forEach((row, index) => {
+        const item = state.items.find((i) => i.id === row.dataset.id);
+        if (item) {
+          item.sortOrder = index;
+          updates.push(DB.putItem(item));
+        }
+      });
+      await Promise.all(updates);
+      // Re-render to enforce checked-to-bottom rule
+      renderShoppingList();
+    },
+  });
 }
 
 init();
