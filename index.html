@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ShopList" />
+  <meta name="theme-color" content="#16a34a" />
+
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/style.css" />
+
+  <title>Shopping List</title>
+</head>
+<body>
+
+  <header>
+    <h1>🛒 Shopping List</h1>
+    <p class="subtitle" id="count">0 items left</p>
+  </header>
+
+  <div class="add-bar">
+    <input
+      id="item-name"
+      type="text"
+      placeholder="Add an item…"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+    />
+    <input
+      id="item-qty"
+      class="qty-input"
+      type="text"
+      placeholder="Qty"
+      autocomplete="off"
+    />
+    <button class="btn btn-add" onclick="addItem()">Add</button>
+  </div>
+
+  <div class="controls">
+    <span></span>
+    <button class="btn-clear" onclick="clearChecked()">Clear checked</button>
+  </div>
+
+  <main id="list"></main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
