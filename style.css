@@ -188,18 +188,42 @@ header p.subtitle {
   min-width: 0;
 }
 
-.item-name {
+.item-name-input,
+.item-qty-input {
+  border: none;
+  background: transparent;
+  font-family: inherit;
   font-size: 1rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: inherit;
+  outline: none;
+  padding: 0.15rem 0.3rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+  min-width: 0;
 }
 
-.item-qty {
-  font-size: 0.78rem;
+.item-name-input {
+  flex: 1;
+  font-weight: 500;
+}
+
+.item-qty-input {
+  width: 60px;
+  text-align: center;
+  font-size: 0.88rem;
   color: var(--gray-400);
-  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.item-name-input:focus,
+.item-qty-input:focus {
+  background: var(--gray-100);
+  color: var(--gray-800);
+}
+
+.item.checked .item-name-input {
+  text-decoration: line-through;
+  color: var(--gray-400);
 }
 
 .item-delete {

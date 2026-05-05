@@ -77,12 +77,22 @@ async function render() {
 
   list.innerHTML = sorted.map((item) => `
     <div class="item ${item.checked ? 'checked' : ''}" data-id="${item.id}">
-      <button class="item-check" aria-label="Toggle ${item.name}" onclick="toggle('${item.id}')"></button>
-      <div class="item-body">
-        <div class="item-name">${escHtml(item.name)}</div>
-        ${item.qty ? `<div class="item-qty">${escHtml(item.qty)}</div>` : ''}
-      </div>
-      <button class="item-delete" aria-label="Delete ${item.name}" onclick="remove('${item.id}')">✕</button>
+      <button class="item-check" aria-label="Toggle ${escHtml(item.name)}" onclick="toggle('${item.id}')"></button>
+      <input
+        class="item-name-input"
+        value="${escAttr(item.name)}"
+        placeholder="Item name"
+        onblur="updateField('${item.id}', 'name', this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()"
+      />
+      <input
+        class="item-qty-input"
+        value="${escAttr(item.qty || '')}"
+        placeholder="Qty"
+        onblur="updateField('${item.id}', 'qty', this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()"
+      />
+      <button class="item-delete" aria-label="Delete ${escHtml(item.name)}" onclick="remove('${item.id}')">✕</button>
     </div>
   `).join('');
 }
@@ -111,7 +121,18 @@ async function addItem() {
   await render();
 }
 
-async function toggle(id) {
+async function updateField(id, field, value) {
+  const all = await dbGetAll();
+  const item = all.find((i) => i.id === id);
+  if (!item) return;
+  const trimmed = value.trim();
+  if (field === 'name' && !trimmed) return; // don't save empty name
+  item[field] = trimmed;
+  await dbPut(item);
+  await render();
+}
+
+
   const all = await dbGetAll();
   const item = all.find((i) => i.id === id);
   if (!item) return;
@@ -136,6 +157,10 @@ async function clearChecked() {
 
 function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escAttr(str) {
+  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 let toastTimer;
